@@ -8,9 +8,14 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.View;
 
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -21,35 +26,78 @@ public class MainActivity extends AppCompatActivity implements RecyclerAdapter.O
 
     List<String> moviesList;
 
+    private static final String REMOTE_IP = "193.42.40.110";//服務器地址
+    private static final String URL = "jdbc:mysql://" + REMOTE_IP + "/MedBigDataAI?autoReconnect=true&failOverReadOnly=false&maxReconnects=10";
+    private static final String USER = "medical";//數據庫賬戶
+    private static final String PASSWORD = "ggininder";//數據庫密碼
+
+    private Connection conn;
+
+    public void onConn(View view) {
+
+        new Thread() {
+            public void run() {
+                Log.e("============", "預備連接數據庫");
+                conn = Util.openConnection(URL, USER, PASSWORD);
+            }
+        }.start();
+    }
+
+    public void onInsert(View view) {
+        new Thread() {
+            public void run() {
+                Log.e("============", "預備插入");
+                String sql = "insert into users values(3, 'yinhongbo', 'yinhongbo')";
+                Util.execSQL(conn, sql);
+            }
+        }.start();
+    }
+
+    public void onDelete(View view) {
+        String sql = "delete from mytable where name='mark'";
+        Util.execSQL(conn, sql);
+    }
+
+    public void onUpdate(View view) {
+        String sql = "update mytable set name='lilei' where name='hanmeimei'";
+        Util.execSQL(conn, sql);
+    }
+
+    public ResultSet onQuery(View view, String sql) {
+        final ResultSet[] result = {null};
+        new Thread() {
+            public void run() {
+                Log.e("============", "預備查詢");
+                result[0] = Util.query(conn,  sql);
+            }
+        }.start();
+        return result[0];
+    }
+
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
         moviesList = new ArrayList<>();
-        moviesList.add("Iron Man");
-        moviesList.add("The Incredible Hulk");
-        moviesList.add("Iron Man 2");
-        moviesList.add("Thor");
-        moviesList.add("Captain America: The First Avenger");
-        moviesList.add("The Avengers");
-        moviesList.add("Iron Man 3");
-        moviesList.add("Thor: The Dark World");
-        moviesList.add("Captain America: The Winter Soldier");
-        moviesList.add("Guardians of the Galaxy");
-        moviesList.add("Avengers: Age of Ultron");
-        moviesList.add("Ant-Man");
-        moviesList.add("Captain America: Civil War");
-        moviesList.add("Doctor Strange");
-        moviesList.add("Guardians of the Galaxy Vol. 2");
-        moviesList.add("Spider-Man: Homecoming");
-        moviesList.add("Thor: Ragnarok");
-        moviesList.add("Black Panther");
-        moviesList.add("Avengers: Infinity War");
-        moviesList.add("Ant-Man and the Wasp");
-        moviesList.add("Captain Marvel");
-        moviesList.add("Avengers: Endgame");
-        moviesList.add("Spider-Man: Far From Home");
+
+        this.onConn(null);
+
+        while(conn == null);
+        ResultSet result = this.onQuery(null, "SELECT * FROM patient_info;");
+
+        try {
+            if (result != null && result.first()) {
+                int nameColumnIndex = result.findColumn("name");
+                while (!result.isAfterLast()) {
+                    moviesList.add(result.getString(nameColumnIndex));
+                    result.next();
+                }
+            }
+        } catch (SQLException throwables) {
+            throwables.printStackTrace();
+        }
 
         recyclerView = findViewById(R.id.recyclerView);
         recyclerAdapter = new RecyclerAdapter(moviesList, this);
@@ -58,6 +106,20 @@ public class MainActivity extends AppCompatActivity implements RecyclerAdapter.O
 
         DividerItemDecoration dividerItemDecoration = new DividerItemDecoration(this, DividerItemDecoration.VERTICAL);
         recyclerView.addItemDecoration(dividerItemDecoration);
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (conn != null) {
+            try {
+                conn.close();
+            } catch (SQLException e) {
+                conn = null;
+            } finally {
+                conn = null;
+            }
+        }
     }
 
     @Override
